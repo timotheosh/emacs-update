@@ -1,0 +1,17 @@
+* Emacs-Update  - Looks for git projects your Doom Emacs uses and notifies if the package has updates.
+
+** Usage
+
+** Installation
+
+** Author
+
++ Tim Hawes (trhawes@gmail.com)
+
+** Copyright
+
+Copyright (c) 2022 Tim Hawes (trhawes@gmail.com)
+
+** License
+
+Licensed under the MIT License.
