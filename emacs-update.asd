@@ -4,11 +4,12 @@
   :license "MIT"
   :depends-on (#:cl-ppcre
                #:unix-opts
-	       #:drakma)
+               #:yason
+               #:drakma)
   :components ((:module "src"
                 :components
                 ((:file "package")
-		 (:file "main"))))
+                 (:file "main"))))
   :description "Looks for git projects your Doom Emacs uses and notifies if the package has updates."
   :in-order-to ((test-op (test-op "emacs-update/tests")))
   :build-operation "asdf:program-op"
