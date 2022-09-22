@@ -1,12 +1,18 @@
 (in-package :emacs-update)
 
+(defparameter *package-path* "~/.config/emacs-configs/default/doom/packages.el")
 
-
-(defun get-user (account)
-  *github-user*)
+(defun trim-all (str)
+  (string-trim '(#\Space #\Newline #\Backspace #\Tab
+                 #\Linefeed #\Page #\Return #\Rubout)
+               str))
 
 (defun get-password (account)
-  *github-pass*)
+  (cond ((equalp account :github) (cl-ppcre:split
+                                   "\\s+" (trim-all (uiop:read-file-string
+                                                     "~/Sync/Apps/Github/githubreadonly_api_key.txt"))))
+        ((equalp account :gitlab) '("foo bar"))
+        (t     "Invalid account")))
 
 (defun substringp (needle haystack &key (test 'char=))
   "Returns the index of the first occurrence of the string designated
@@ -21,10 +27,11 @@ defaults to CHAR= (for case-sensitive comparison)."
   (uiop:read-file-forms package-path))
 
 (defun github-commits (user/repo)
-  (let ((stream (drakma:http-request
-                 (format nil "https://api.github.com/repos/~A/commits" user/repo)
-                 :basic-authorization (list (get-user :github) (get-password :github))
-                 :want-stream t)))
+  (let* ((credentials  (get-password :github))
+         (stream (drakma:http-request
+                  (format nil "https://api.github.com/repos/~A/commits" user/repo)
+                  :basic-authorization credentials
+                  :want-stream t)))
     (setf (flexi-streams:flexi-stream-external-format stream) :utf-8)
     (setf yason:*parse-object-key-fn* (lambda (key) (intern (string-upcase key) "KEYWORD")))
     (let ((last-commit (first (yason:parse stream :object-as :plist))))
