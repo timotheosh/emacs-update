@@ -5,7 +5,10 @@
   :depends-on (#:cl-ppcre
                #:unix-opts
                #:yason
-               #:drakma)
+               #:drakma
+               #:local-time
+               #:fset
+               #:modf)
   :components ((:module "src"
                 :components
                 ((:file "package")

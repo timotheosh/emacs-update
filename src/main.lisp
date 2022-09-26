@@ -26,17 +26,37 @@ defaults to CHAR= (for case-sensitive comparison)."
 (defun get-package-list (package-path)
   (uiop:read-file-forms package-path))
 
-(defun github-commits (user/repo)
-  (let* ((credentials  (get-password :github))
+(defun github/parse-commit (commit)
+  (list :pin (getf commit :sha)
+        :commit-date (getf (getf (getf commit :commit) :author) :date)))
+
+(defun github/get-commit-date-from-pin (user/repo pin)
+  "Returns the commit data of the matching pin."
+  (let* ((credentials (get-password :github))
          (stream (drakma:http-request
-                  (format nil "https://api.github.com/repos/~A/commits" user/repo)
+                  (format nil "https://api.github.com/repos/~A/commits?sha=~A" user/repo pin)
                   :basic-authorization credentials
                   :want-stream t)))
     (setf (flexi-streams:flexi-stream-external-format stream) :utf-8)
     (setf yason:*parse-object-key-fn* (lambda (key) (intern (string-upcase key) "KEYWORD")))
-    (let ((last-commit (first (yason:parse stream :object-as :plist))))
-      (list :pin (getf last-commit :sha)
-            :commit-date (getf (getf (getf last-commit :commit) :author) :date)))))
+    (modf:modf (getf (github/parse-commit (first (yason:parse stream :object-as :plist))) :repo) user/repo)))
+
+(defun github/latest-commit (user/repo)
+  (let* ((credentials  (get-password :github))
+         (stream (drakma:http-request
+                  (format nil "https://api.github.com/repos/~A/commits?per_page=1" user/repo)
+                  :basic-authorization credentials
+                  :want-stream t)))
+    (setf (flexi-streams:flexi-stream-external-format stream) :utf-8)
+    (setf yason:*parse-object-key-fn* (lambda (key) (intern (string-upcase key) "KEYWORD")))
+    (modf:modf (getf (github/parse-commit (first (yason:parse stream :object-as :plist))) :repo) user/repo)))
+
+(defun github/commit-to-json (commit)
+  (let ((yason:*symbol-encoder* #'yason:encode-symbol-as-string)
+        (yason:*symbol-key-encoder* #'string-downcase)
+        (stream (make-string-output-stream)))
+    (yason:encode-plist commit stream)
+    (get-output-stream-string stream)))
 
 (defun without-recipes (packages)
   "This returns a list of packages that do not have any recipes."
@@ -55,16 +75,23 @@ defaults to CHAR= (for case-sensitive comparison)."
     packages)))
 
 (defun check-github-package (package)
-  (let ((github-commit (github-commits (getf package :repo))))
-    (when (not (substringp (getf package :pin) (getf github-commit :pin)))
-      github-commit)))
+  (let ((github-commit (github/latest-commit (getf package :repo))))
+    (when (and (not (null (getf package :pin)))
+               (not (substringp (getf package :pin) (getf github-commit :pin))))
+      (modf:modf (getf (github/get-commit-date-from-pin (getf package :repo) (getf package :pin)) :update)
+                 github-commit))))
 
 (defun -main (&rest args)
   (let* ((packages (get-package-list *package-path*))
          (github-packages (with-recipe 'github packages))
          (gitlab-packages (with-recipe 'gitlab packages))
          (other-packages (without-recipes packages)))
-    (mapcar
-     (lambda (package)
-       (check-github-package package))
-     github-packages)))
+    (let ((data (mapcar
+                 #'github/commit-to-json
+                 (remove-if
+                  #'null
+                  (mapcar
+                   (lambda (package)
+                     (check-github-package package))
+                   github-packages)))))
+      (format nil "{\"emacs-updates\": [~{~A~}]}" data))))
