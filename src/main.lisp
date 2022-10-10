@@ -2,6 +2,9 @@
 
 (defparameter *package-path* "~/.config/emacs-configs/default/doom/packages.el")
 
+(defun join (l &key (sep ", "))
+  (format nil (format nil "~a~a~a" "~{~a~^" sep "~}") l))
+
 (defun trim-all (str)
   (string-trim '(#\Space #\Newline #\Backspace #\Tab
                  #\Linefeed #\Page #\Return #\Rubout)
@@ -54,6 +57,7 @@ defaults to CHAR= (for case-sensitive comparison)."
 (defun github/commit-to-json (commit)
   (let ((yason:*symbol-encoder* #'yason:encode-symbol-as-string)
         (yason:*symbol-key-encoder* #'string-downcase)
+        (yason:*list-encoder* #'yason:encode-plist)
         (stream (make-string-output-stream)))
     (yason:encode-plist commit stream)
     (get-output-stream-string stream)))
@@ -71,7 +75,7 @@ defaults to CHAR= (for case-sensitive comparison)."
    (lambda (recipe) (list :pin (getf recipe :pin)
                           :repo (getf (getf recipe :recipe) :repo)))
    (remove-if-not
-    (lambda (package) (equalp (getf (getf package :recipe) :host) host))
+    (lambda (package) (string-equal (getf (getf package :recipe) :host) host))
     packages)))
 
 (defun check-github-package (package)
@@ -81,17 +85,17 @@ defaults to CHAR= (for case-sensitive comparison)."
       (modf:modf (getf (github/get-commit-date-from-pin (getf package :repo) (getf package :pin)) :update)
                  github-commit))))
 
-(defun -main (&rest args)
+(defun get-all-updates ()
   (let* ((packages (get-package-list *package-path*))
          (github-packages (with-recipe 'github packages))
          (gitlab-packages (with-recipe 'gitlab packages))
          (other-packages (without-recipes packages)))
-    (let ((data (mapcar
-                 #'github/commit-to-json
-                 (remove-if
-                  #'null
-                  (mapcar
-                   (lambda (package)
-                     (check-github-package package))
-                   github-packages)))))
-      (format nil "{\"emacs-updates\": [~{~A~}]}" data))))
+    (join
+     (mapcar #'github/commit-to-json
+             (remove-if #'null
+                        (mapcar (lambda (package)
+                                  (check-github-package package))
+                                github-packages))))))
+
+(defun -main (&rest args)
+  (format t "{\"github\": [~A]}" (get-all-updates)))

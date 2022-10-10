@@ -7,7 +7,7 @@ SBCL=$(which sbcl)
 rm -rf target/
 
 if [ -n ${ROS} ];then
-    ${ROS} run -e "${COMMAND}" -q
+	${ROS} run -e "(ql:quickload :${SYSTEM_NAME})" -e "(asdf:make :${SYSTEM_NAME})" -q
 elif [ -n ${SBCL} ];then
     ${SBCL} --eval ${COMMAND} --quit
 else
